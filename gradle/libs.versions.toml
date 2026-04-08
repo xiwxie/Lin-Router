@@ -24,11 +24,11 @@ appMinSdk = "24"
 # 应用目标 SDK 版本
 appTargetSdk = "35"
 # 应用当前 JVM 版本号
-appJavaVersion = "VERSION_21"
+appJavaVersion = "VERSION_17"
 # 应用当前 JVM 目标版本号
-appJVMTarget = "JVM_21"
+appJVMTarget = "JVM_17"
 # 应用当前 JVM 工具链版本
-appJVMtoolchain = "21"
+appJVMtoolchain = "17"
 # APP 版本名称
 appVersionName = "2.7.5"
 # APP 版本号
