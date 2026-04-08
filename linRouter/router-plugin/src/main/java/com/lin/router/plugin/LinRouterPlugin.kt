@@ -44,11 +44,10 @@ class LinRouterPlugin : Plugin<Project> {
 
                 dependencies {
                     // 动态拼接 JitPack 上的真实坐标，例如：
-                    // implementation("com.github.LinChen.LinRouter:minirouter-api:1.0.0")
-                    add("implementation", "$targetGroupId:minirouter-api:$targetVersion")
-
+                    // implementation("com.github.LinChen.LinRouter:router-api:1.0.0")
+                    add("implementation", "$targetGroupId:router-api:$targetVersion")
                     // ksp("com.github.LinChen.LinRouter:minirouter-compiler:1.0.0")
-                    add("ksp", "$targetGroupId:minirouter-compiler:$targetVersion")
+                    add("ksp", "$targetGroupId:router-compiler:$targetVersion")
                 }
             }
         }
