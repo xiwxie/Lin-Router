@@ -1,5 +1,5 @@
 package com.lin.router.api
 
-interface IRouterInjector {
-    fun inject(target: Any)
+public interface IRouterInjector {
+    public fun inject(target: Any)
 }

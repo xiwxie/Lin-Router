@@ -7,4 +7,4 @@ package com.lin.router.api
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
-annotation class Interceptor(val priority: Int = 0)
+public annotation class Interceptor(val priority: Int = 0)

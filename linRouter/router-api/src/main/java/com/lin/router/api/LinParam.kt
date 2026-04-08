@@ -2,4 +2,4 @@ package com.lin.router.api
 
 @Target(AnnotationTarget.FIELD)
 @Retention(AnnotationRetention.BINARY)
-annotation class LinParam(val name: String = "")
+public annotation class LinParam(val name: String = "")
