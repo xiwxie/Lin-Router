@@ -1,6 +1,6 @@
 # 🚀 LinRouter (组件化路由框架)
 
-[![JitPack](https://jitpack.io/v/LinChen/LinRouter.svg)](https://jitpack.io/#LinChen/LinRouter)
+[![JitPack](https://jitpack.io/#xiwxie/Lin-Router.svg)](https://jitpack.io/#LinChen/LinRouter)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 LinRouter 是一个专为现代化 Android 多模块工程打造的**极速、类型安全、零反射**的组件化路由框架。
