@@ -9,7 +9,6 @@ publishInfo {
     groupId = "com.lin.lib.router"
 }
 dependencies {
-    compileOnly(project(":linRouter:router-api"))
     implementation(libs.symbol.processing.api)
     implementation(libs.kotlinpoet)
     implementation(libs.kotlinpoet.ksp)
