@@ -46,19 +46,19 @@ public object LinRouter {
     }
 
     @JvmStatic
-    fun build(path: String): RouteRequest = RouteRequest(path)
+    public fun build(path: String): RouteRequest = RouteRequest(path)
 
     /**
      * 引擎层：执行实例获取 (同步返回)
      */
-    fun executeFetchClass(request: RouteRequest): Class<*>? {
+    public fun executeFetchClass(request: RouteRequest): Class<*>? {
         return routeMap[request.path]
     }
 
     /**
      * 引擎层：执行实例获取 (同步返回)
      */
-    fun executeFetch(request: RouteRequest): Any? {
+    public fun executeFetch(request: RouteRequest): Any? {
         val targetClass = routeMap[request.path] ?: return null
         request.targetClass = targetClass
         return try {
@@ -81,7 +81,7 @@ public object LinRouter {
     /**
      * 3. 供内部调用的 Activity 导航逻辑 (包含拦截器责任链)
      */
-    fun executeNavigate(request: RouteRequest, callback: RouteCallback?) {
+    public fun executeNavigate(request: RouteRequest, callback: RouteCallback?) {
         if (!isInitialized) Log.w(TAG, "请先调用 LinRouter.init()")
 
         val targetClass = routeMap[request.path]
@@ -121,7 +121,7 @@ public object LinRouter {
     /**
      * 5. 自动参数注入入口 (配合 @LinParam)
      */
-    fun inject(target: Any) {
+    public fun inject(target: Any) {
         val className = target.javaClass.name
         val injectorName = "${className}_LinInjector"
 
