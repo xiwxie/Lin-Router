@@ -1,8 +1,8 @@
 import com.android.build.gradle.LibraryExtension
-import com.misterp.build.plugin.ext.buildCompileOptions
-import com.misterp.build.plugin.ext.buildLibTypesTemp
-import com.misterp.build.plugin.ext.findVersionToInt
-import com.misterp.build.plugin.ext.libApplyJvmConfig
+import com.misterp.plugin.ext.buildCompileOptions
+import com.misterp.plugin.ext.buildLibTypesTemp
+import com.misterp.plugin.ext.findVersionToInt
+import com.misterp.plugin.ext.libApplyJvmConfig
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.apply

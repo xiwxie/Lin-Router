@@ -1,6 +1,6 @@
 import com.android.build.gradle.LibraryExtension
-import com.misterp.build.plugin.ext.PublishExtension
-import com.misterp.build.plugin.ext.findLocalProperty
+import com.misterp.plugin.ext.PublishExtension
+import com.misterp.plugin.ext.findLocalProperty
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.JavaPluginExtension

@@ -1,9 +1,9 @@
 import com.android.build.api.dsl.ApplicationExtension
-import com.misterp.build.plugin.ext.appApplyJvmConfig
-import com.misterp.build.plugin.ext.buildCompileOptions
-import com.misterp.build.plugin.ext.buildTypesTemp
-import com.misterp.build.plugin.ext.findVersionToInt
-import com.misterp.build.plugin.ext.findVersionToString
+import com.misterp.plugin.ext.appApplyJvmConfig
+import com.misterp.plugin.ext.buildCompileOptions
+import com.misterp.plugin.ext.buildTypesTemp
+import com.misterp.plugin.ext.findVersionToInt
+import com.misterp.plugin.ext.findVersionToString
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.apply

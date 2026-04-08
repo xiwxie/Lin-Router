@@ -1,6 +1,6 @@
 import com.android.build.api.dsl.CommonExtension
 import com.google.devtools.ksp.gradle.KspExtension
-import com.misterp.build.plugin.ext.libs
+import com.misterp.plugin.ext.libs
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
