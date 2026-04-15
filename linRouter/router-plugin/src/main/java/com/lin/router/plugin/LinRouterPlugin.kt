@@ -33,7 +33,7 @@ class LinRouterPlugin : Plugin<Project> {
             // 4. KSP 参数注入：使用终极防冲突算法处理项目路径
             extensions.findByType(KspExtension::class.java)?.apply {
                 // 将 ":feature:home:ui" 转换为 "FeatureHomeUi"
-                val safeModuleName = project.path
+                val safeModuleName = target.path
                 arg("routerModuleName", safeModuleName)
             }
 

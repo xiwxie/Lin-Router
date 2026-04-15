@@ -17,9 +17,9 @@ abstract class LinRouterExtension {
     init {
         // 💡 默认值：直接指向你在 JitPack 上的开源坐标！
         // 假设你的 GitHub 账号叫 LinChen，仓库名是 LinRouter
-        groupId.convention("com.github.LinChen.LinRouter")
+        groupId.convention("com.github.xiwxie.Lin-Router")
         
         // 默认底层引擎版本，当你要发新版路由时，在这里改一下默认值即可
-        version.convention("1.0.0") 
+        version.convention("v1.0.7")
     }
 }

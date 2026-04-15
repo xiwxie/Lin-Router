@@ -15,7 +15,18 @@ public class RouteRequest(public val path: String) {
     public var enterAnim: Int = -1
     public var exitAnim: Int = -1
 
+    //是否在跳转后销毁当前页面，默认不销毁
+    internal var shouldFinishCurrent: Boolean = false
+
     public fun withContext(ctx: Context): RouteRequest = apply { this.context = ctx }
+
+    /**
+     * 🌟 核心拓展：声明在跳转成功后，销毁传入的 Context (必须是 Activity)
+     */
+    public fun withFinish(): RouteRequest {
+        this.shouldFinishCurrent = true
+        return this
+    }
 
     // --- 极度舒适的链式参数传递 ---
     public fun withString(key: String, value: String?): RouteRequest =

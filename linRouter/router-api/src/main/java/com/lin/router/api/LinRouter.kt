@@ -108,7 +108,15 @@ public object LinRouter {
                 else if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
-
+            if (request.shouldFinishCurrent) {
+                // 只有当传入的 Context 是 Activity 时，才有资格调用 finish()
+                if (context is Activity) {
+                    context.finish()
+                } else {
+                    // 架构师的严谨：可以输出一条警告日志，提醒业务方传错 Context 了
+                    Log.w("LinRouter", "调用了 withFinish()，但传入的 Context 不是 Activity，无法销毁！")
+                }
+            }
             if (context is Activity && request.enterAnim != -1 && request.exitAnim != -1) {
                 context.overridePendingTransition(request.enterAnim, request.exitAnim)
             }
