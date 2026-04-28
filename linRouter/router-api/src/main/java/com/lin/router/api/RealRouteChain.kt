@@ -5,7 +5,7 @@ import android.os.Looper
 import android.util.Log
 
 public class RealRouteChain(
-    private val interceptors: List<InterceptorMeta>,
+    private val interceptors: List<LinInterceptorMeta>,
     private var index: Int,
     override val request: RouteRequest,
     private val callback: RouteCallback?,

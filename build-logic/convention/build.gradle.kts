@@ -66,11 +66,6 @@ gradlePlugin {
             implementationClass = "AppUploadBuildFilePlugin"
         }
 
-        register("miniRouter") {
-            id = "com.lin.router.plugin"
-            implementationClass = "com.lin.router.plugin.MiniRouterPlugin"
-        }
-
         register("mavenPublish") {
             id = "my.maven.publish"
             implementationClass = "MavenPublishConventionPlugin"

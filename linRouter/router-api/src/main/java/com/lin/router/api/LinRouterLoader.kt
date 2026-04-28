@@ -1,5 +1,5 @@
 package com.lin.router.api
 
-public interface IRouterLoader {
+public interface LinRouterLoader {
     public fun loadInto(map: MutableMap<String, Class<*>>)
 }

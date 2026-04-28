@@ -4,7 +4,7 @@ plugins {
 }
 publishInfo {
     artifactId = "router-compiler"
-    version = "1.0.0-SNAPSHOT"
+    version = "1.0.8-SNAPSHOT"
     description = "路由框架APT"
     groupId = "com.lin.lib.router"
 }

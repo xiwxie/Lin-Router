@@ -3,45 +3,65 @@ package com.lin.router.api
 import android.app.Activity
 import android.content.Intent
 import android.os.SystemClock
-import android.util.Log
-import java.util.ServiceLoader
 
 public object LinRouter {
     private const val TAG = "LinRouter"
     private val routeMap = mutableMapOf<String, Class<*>>()
-    private val interceptorMetas = mutableListOf<InterceptorMeta>()
+    private val interceptorMetas = mutableListOf<LinInterceptorMeta>()
     private var isInitialized = false
 
-    // 参数注入器缓存池 (控制反射开销)
-    private val injectorCache = android.util.LruCache<String, IRouterInjector>(50)
+    // 日志系统
+    private var isDebug = false
+    private var logger: IRouterLogger = DefaultRouterLogger(false)
+
+    // 参数注入器缓存池
+    private val injectorCache = android.util.LruCache<String, LinRouterInjector>(50)
+
+    /**
+     * 设置调试模式
+     */
+    public fun setDebug(debug: Boolean): LinRouter {
+        this.isDebug = debug
+        // 如果当前是默认实现，则更新其开关
+        if (this.logger is DefaultRouterLogger) {
+            this.logger = DefaultRouterLogger(debug)
+        }
+        return this
+    }
+
+    /**
+     * 设置自定义日志代理
+     */
+    public fun setLogger(proxy: IRouterLogger): LinRouter {
+        this.logger = proxy
+        return this
+    }
 
     public fun init() {
         if (isInitialized) return
         val startTime = SystemClock.elapsedRealtime()
         try {
-            // 【核心魔法所在】
-            // Debug 时，这里走原生 ServiceLoader 反射加载，耗时极短（仅在开发期）。
-            // Release 时，R8 会将其直接编译成类似:
-            // Arrays.asList(new AppRouterLoader(), new UserRouterLoader()).forEach(...)
+            // 【纯 KSP 聚合方案】
+            val hubClass = Class.forName("com.lin.router.generated.LinRouterAppHub")
+            val method = hubClass.getMethod("init", MutableMap::class.java, MutableList::class.java)
+            method.invoke(null, routeMap, interceptorMetas)
 
-            // 1. 加载所有路由表
-            val routerLoaders = ServiceLoader.load(IRouterLoader::class.java)
-            for (loader in routerLoaders) {
-                loader.loadInto(routeMap)
-            }
-
-            // 2. 加载所有拦截器
-            val interceptorLoaders = ServiceLoader.load(IInterceptorLoader::class.java)
-            for (loader in interceptorLoaders) {
-                loader.loadInto(interceptorMetas)
-            }
+            // 排序拦截器
             interceptorMetas.sortByDescending { it.priority }
 
             isInitialized = true
             val totalTime = SystemClock.elapsedRealtime() - startTime
-            Log.i(TAG, "初始化成功！路由节点数: ${routeMap.size}, 拦截器数: ${interceptorMetas.size}, 耗时：$totalTime")
+            logger.i(TAG, "初始化成功 (KSP 聚合模式)！路由节点数: ${routeMap.size}, 拦截器数: ${interceptorMetas.size}, 耗时：${totalTime}ms")
+            
+            if (isDebug) {
+                routeMap.forEach { (path, clazz) ->
+                    logger.v(TAG, "  [加载路由] $path -> ${clazz.name}")
+                }
+            }
+        } catch (e: ClassNotFoundException) {
+            logger.e(TAG, "LinRouter 初始化失败：未找到 LinRouterAppHub。请确保在 app 模块应用了 com.lin.router.plugin")
         } catch (e: Exception) {
-            Log.e(TAG, "LinRouter 初始化异常", e)
+            logger.e(TAG, "LinRouter 初始化发生异常", e)
         }
     }
 
@@ -64,15 +84,13 @@ public object LinRouter {
         return try {
             val instance = targetClass.getDeclaredConstructor().newInstance()
 
-            // 如果是 Fragment，自动把装配好的 Bundle 塞进去
             if (instance is androidx.fragment.app.Fragment && !request.extras.isEmpty) {
                 instance.arguments = request.extras
             }
-            // 预留：如果是旧版 android.app.Fragment，也可以在这里加分支
 
             instance
         } catch (e: Exception) {
-            Log.e(TAG, "实例获取失败: ${request.path}", e)
+            logger.e(TAG, "实例获取失败: ${request.path}", e)
             null
         }
     }
@@ -82,11 +100,11 @@ public object LinRouter {
      * 3. 供内部调用的 Activity 导航逻辑 (包含拦截器责任链)
      */
     public fun executeNavigate(request: RouteRequest, callback: RouteCallback?) {
-        if (!isInitialized) Log.w(TAG, "请先调用 LinRouter.init()")
+        if (!isInitialized) logger.w(TAG, "警告：请先调用 LinRouter.init()")
 
         val targetClass = routeMap[request.path]
         if (targetClass == null) {
-            Log.e(TAG, "找不到路由: ${request.path}")
+            logger.e(TAG, "找不到路由: ${request.path}")
             callback?.onLost(request)
             return
         }
@@ -109,12 +127,10 @@ public object LinRouter {
             }
             context.startActivity(intent)
             if (request.shouldFinishCurrent) {
-                // 只有当传入的 Context 是 Activity 时，才有资格调用 finish()
                 if (context is Activity) {
                     context.finish()
                 } else {
-                    // 架构师的严谨：可以输出一条警告日志，提醒业务方传错 Context 了
-                    Log.w("LinRouter", "调用了 withFinish()，但传入的 Context 不是 Activity，无法销毁！")
+                    logger.w(TAG, "调用了 withFinish()，但传入的 Context 不是 Activity，无法销毁！")
                 }
             }
             if (context is Activity && request.enterAnim != -1 && request.exitAnim != -1) {
@@ -122,7 +138,7 @@ public object LinRouter {
             }
             callback?.onArrival(request)
         } catch (e: Exception) {
-            Log.e(TAG, "Activity 跳转失败: ${request.path}", e)
+            logger.e(TAG, "Activity 跳转失败: ${request.path}", e)
         }
     }
 
@@ -137,16 +153,14 @@ public object LinRouter {
             var injector = injectorCache.get(className)
             if (injector == null) {
                 val clazz = Class.forName(injectorName)
-                injector = clazz.getDeclaredConstructor().newInstance() as IRouterInjector
+                injector = clazz.getDeclaredConstructor().newInstance() as LinRouterInjector
                 injectorCache.put(className, injector)
             }
             injector.inject(target)
         } catch (e: ClassNotFoundException) {
-            // 正常防守：如果页面没写 @LinParam，KSP 就不会生成 Injector，忽略即可
-            Log.v(TAG, "页面无注入配置: $className")
+            logger.v(TAG, "页面无注入配置: $className")
         } catch (e: Exception) {
-            Log.e(TAG, "参数注入失败: $className", e)
+            logger.e(TAG, "参数注入失败: $className", e)
         }
     }
-
 }
