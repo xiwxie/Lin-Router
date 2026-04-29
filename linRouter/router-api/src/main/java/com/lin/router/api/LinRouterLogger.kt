@@ -1,32 +1,59 @@
 package com.lin.router.api
 
+import android.util.Log
+
 /**
- * 路由日志接口，支持外部代理
+ * 日志级别定义
  */
+public enum class LinLogLevel(public val value: Int) {
+    ALL(0),
+    VERBOSE(2),
+    DEBUG(3),
+    INFO(4),
+    WARN(5),
+    ERROR(6),
+    OFF(100) // 全局关闭
+}
+
 public interface IRouterLogger {
-    public fun i(tag: String, message: String)
-    public fun w(tag: String, message: String)
-    public fun e(tag: String, message: String, throwable: Throwable? = null)
-    public fun v(tag: String, message: String)
+    public fun v(tag: String, msg: String)
+    public fun d(tag: String, msg: String)
+    public fun i(tag: String, msg: String)
+    public fun w(tag: String, msg: String)
+    public fun e(tag: String, msg: String)
+    public fun e(tag: String, msg: String, e: Throwable)
 }
 
 /**
- * 默认 Android Log 实现
+ * 默认日志实现，支持级别过滤
  */
-internal class DefaultRouterLogger(private var isDebug: Boolean) : IRouterLogger {
-    override fun i(tag: String, message: String) {
-        if (isDebug) android.util.Log.i(tag, message)
+internal class DefaultRouterLogger(private var level: LinLogLevel) : IRouterLogger {
+
+    fun setLevel(level: LinLogLevel) {
+        this.level = level
     }
 
-    override fun w(tag: String, message: String) {
-        if (isDebug) android.util.Log.w(tag, message)
+    override fun v(tag: String, msg: String) {
+        if (level.value <= LinLogLevel.VERBOSE.value) Log.v(tag, msg)
     }
 
-    override fun e(tag: String, message: String, throwable: Throwable?) {
-        if (isDebug) android.util.Log.e(tag, message, throwable)
+    override fun d(tag: String, msg: String) {
+        if (level.value <= LinLogLevel.DEBUG.value) Log.d(tag, msg)
     }
 
-    override fun v(tag: String, message: String) {
-        if (isDebug) android.util.Log.v(tag, message)
+    override fun i(tag: String, msg: String) {
+        if (level.value <= LinLogLevel.INFO.value) Log.i(tag, msg)
+    }
+
+    override fun w(tag: String, msg: String) {
+        if (level.value <= LinLogLevel.WARN.value) Log.w(tag, msg)
+    }
+
+    override fun e(tag: String, msg: String) {
+        if (level.value <= LinLogLevel.ERROR.value) Log.e(tag, msg)
+    }
+
+    override fun e(tag: String, msg: String, e: Throwable) {
+        if (level.value <= LinLogLevel.ERROR.value) Log.e(tag, msg, e)
     }
 }

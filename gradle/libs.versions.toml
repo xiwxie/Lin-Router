@@ -35,7 +35,7 @@ appVersionName = "2.7.5"
 appVersionCode = "392"
 
 # LinRouter
-linRoute = "1.2.0-SNAPSHOT"
+linRoute = "1.2.4"
 kotlin = "2.1.21"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -56,9 +56,9 @@ symbol-processing-api = { module = "com.google.devtools.ksp:symbol-processing-ap
 symbol-processing-gradle-plugin = { module = "com.google.devtools.ksp:symbol-processing-gradle-plugin", version.ref = "symbolProcessingGradlePlugin" }
 
 # LinRouter Libraries
-lin-route-plugin = { group = "com.lin.lib.router", name = "router-plugin", version.ref = "linRoute" }
-lin-route-api = { group = "com.lin.lib.router", name = "router-api", version.ref = "linRoute" }
-lin-route-compiler = { group = "com.lin.lib.router", name = "router-compiler", version.ref = "linRoute" }
+lin-route-plugin = { group = "com.github.xiwxie.Lin-Router", name = "router-plugin", version.ref = "linRoute" }
+lin-route-api = { group = "com.github.xiwxie.Lin-Router", name = "router-api", version.ref = "linRoute" }
+lin-route-compiler = { group = "com.github.xiwxie.Lin-Router", name = "router-compiler", version.ref = "linRoute" }
 
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }

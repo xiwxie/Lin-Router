@@ -48,6 +48,7 @@ class MavenPublishConventionPlugin : Plugin<Project> {
                             groupId = extension.groupId
                             artifactId = extension.artifactId ?: project.name
                             version = extension.version
+                            println("LinRouter-Publish: Publishing ${groupId}:${artifactId}:${version}")
                             pom {
                                 name.set(extension.artifactId ?: project.name)
                                 description.set(extension.description)
