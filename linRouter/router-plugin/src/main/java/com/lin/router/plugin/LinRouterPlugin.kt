@@ -58,29 +58,37 @@ class LinRouterPlugin : Plugin<Project> {
                     val currentModule = target.path
                     println("LinRouter: [AutoScan] 模块 ${currentModule} ")
                     afterEvaluate {
-                        val kspExtension = extensions.findByType(KspExtension::class.java)
-                        if (kspExtension != null) {
-                            // 扫描所有应用了本插件的模块 (包括自己)
-                            val allRouterModules = rootProject.allprojects
-                                .asSequence()
-                                .filter { it.path != currentModule && !it.path.trim().equals(":", true) }
-                                .filter { subProject ->
-                                    // 性能底线：放弃解析 dependencies。
-                                    // 强制契约：要求参与路由的子模块必须应用插件，或在 build.gradle 中声明 ext.isRouterModule = true
-                                    val hasPlugin = subProject.pluginManager.hasPlugin("com.lin.router.plugin")
-                                    val hasExtFlag = subProject.extensions.extraProperties.has("isRouterModule") &&
-                                            subProject.extensions.extraProperties.get("isRouterModule").toString().toBoolean()
-                                    hasPlugin || hasExtFlag
-                                }
-                                .map { it.path }
-                                .distinct()
-                                .joinToString(",")
+                        val kspExtension = extensions.findByType(KspExtension::class.java) ?: return@afterEvaluate
+                        // 1. 读取外部强契约配置 (默认为 auto)
+                        val aggregationMode = target.findProperty("linRouter.aggregationMode")?.toString() ?: "auto"
 
-                            if (allRouterModules.isNotEmpty()) {
-                                kspExtension.arg("routerAggregateModules", allRouterModules)
-                                println("LinRouter: [AutoScan] 模块 ${target.path} 已自动开启路由聚合，包含模块: $allRouterModules")
-                            }
+                        // 2. 极速通道：单工程模式，复杂度 O(1)，直接阻断下游耗时扫描
+                        if (aggregationMode.equals("single", ignoreCase = true)) {
+                            kspExtension.arg("routerAggregateModules", currentModule)
+                            println("LinRouter: [FastPath] 命中单体工程模式，聚合目标: $currentModule")
+                            return@afterEvaluate
                         }
+
+                        // 扫描所有应用了本插件的模块 (包括自己)
+                        val allRouterModules = rootProject.allprojects
+                            .asSequence()
+                            .filter { it.path != currentModule && !it.path.trim().equals(":", true) }
+                            .filter { subProject ->
+                                // 性能底线：放弃解析 dependencies。
+                                // 强制契约：要求参与路由的子模块必须应用插件，或在 build.gradle 中声明 ext.isRouterModule = true
+                                val hasPlugin = subProject.pluginManager.hasPlugin("com.lin.router.plugin")
+                                val hasExtFlag = subProject.extensions.extraProperties.has("isRouterModule") &&
+                                        subProject.extensions.extraProperties.get("isRouterModule").toString().toBoolean()
+                                hasPlugin || hasExtFlag
+                            }
+                            .map { it.path }
+                            .distinct()
+                            .joinToString(",")
+
+                        // 兜底注入
+                        val aggregateTargets = allRouterModules.ifEmpty { currentModule }
+                        kspExtension.arg("routerAggregateModules", aggregateTargets)
+                        println("LinRouter: [AutoScan] 模块 ${target.path} 路由配置完毕，聚合列表: $aggregateTargets")
                     }
                 }
 
