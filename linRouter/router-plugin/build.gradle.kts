@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.lin.router.plugin"
-version = "1.1.1"
+version = "1.1.2"
 
 // 注册你的插件元数据（别人用的就是这里定义的 ID）
 gradlePlugin {
