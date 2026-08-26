@@ -38,6 +38,11 @@ dependencyResolutionManagement {
 plugins {
     id("com.lin.router.plugin") version "v1.0.9" apply false
 }
+gradle.properties配置需要调整：
+ 路由聚合模式：
+# single (单体主工程，跳过扫描，直接注入极速编译)
+# auto (默认，多模块自动扫描依赖)
+linRouter.aggregationMode=single
 ```
 
 ### 3. 业务模块启用
