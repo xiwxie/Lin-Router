@@ -79,39 +79,4 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
         }
     }
 
-    /**
-     * 签名模版配置
-     */
-    fun ApplicationExtension.signConfigTmp(project : Project){
-        signingConfigs {
-            create("config") {
-                storeFile = project.file("./hawa.jks")
-                storePassword = "hawa123"
-                keyAlias = "hawa"
-                keyPassword = "hawa123"
-                enableV2Signing = true
-            }
-        }
-    }
-
-    /**
-     * 渠道模版配置
-     */
-    fun ApplicationExtension.productFlavorsTmp(){
-        productFlavors {
-            create("google") {
-                dimension = "hawa"
-                buildConfigField("String", "HAWA_APP_ID", "\"xchat\"")
-                buildConfigField("String", "APPSFLYER_ONELINK_KEY", "\"Burh\"")
-                buildConfigField("String", "APP_STROE_CHANNEL", "\"xxm\"")
-            }
-            create("huawei") {
-                dimension = "hawa"
-                buildConfigField("String", "HAWA_APP_ID", "\"huawei\"")
-                buildConfigField("String", "APPSFLYER_ONELINK_KEY", "\"Burh\"")
-                buildConfigField("String", "APP_STROE_CHANNEL", "\"huawei\"")
-            }
-        }
-    }
-
 }
