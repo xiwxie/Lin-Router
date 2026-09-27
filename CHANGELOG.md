@@ -1,3 +1,16 @@
+# 1.1.3（2026-09-27）
+
+- 新增 `linRouter.hubMode=isolated`，通过独立 Gradle 任务生成 AppHub，避免业务 KSP 的全源码聚合失效。
+- 支持变体隔离、真实依赖类路径发现、空模块及删除更新；任务可复用构建缓存和配置缓存。
+- 保留默认 legacy 模式和显式回退；新增 `linRouter.loaderOrder` 固定依赖装载顺序。
+- 补充固定名 Hub 的 R8 consumer 规则及增量/缓存回归测试。
+- 统一候选发布版本为 `1.1.3-SNAPSHOT`。运行时 API 与编译器处理算法未变。
+- 详见 [发布与升级说明](docs/releases/1.1.3.md)。
+
+---
+
+> 以下为原有历史记录，未追溯验证其中的 ASM/SPI 等描述；本次独立汇总不使用 ASM 插桩。
+
 # LinRouter 修改记录 (2026-04-28)
 
 ## 核心 API 重构 (router-api)

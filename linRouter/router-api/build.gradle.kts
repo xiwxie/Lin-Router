@@ -4,7 +4,7 @@ plugins {
 }
 publishInfo {
     artifactId = "router-api"
-    version = "1.1.2-SNAPSHOT"
+    version = libs.versions.linRouterRelease.get()
     description = "路由框架API"
     groupId = "com.lin.lib.router"
 }

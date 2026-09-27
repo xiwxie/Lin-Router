@@ -10,11 +10,27 @@ import java.util.LinkedHashSet
 
 /**
  * LinRouter 官方插件 (Standalone 版)
- * 内置全轨迹日志监控，支持高效排障，完美兼容全版本 Gradle & AGP
+ * legacy 保留原聚合行为；isolated 将 AppHub 移出业务 KSP。
+ * @author pengshilin
+ * @since 2026-09-27
  */
-class LinRouterPlugin : Plugin<Project> {
+public class LinRouterPlugin : Plugin<Project> {
 
-    override fun apply(target: Project) {
+    /**
+     * 根据显式开关选择汇总实现；不静默降级，避免升级后性能行为不明确。
+     * @param target 应用插件的 Gradle 项目。
+     * @return 无返回值；未知模式会直接报错。
+     */
+    public override fun apply(target: Project): Unit {
+        val hubMode = target.providers.gradleProperty("linRouter.hubMode").getOrElse("legacy")
+        require(hubMode in setOf("legacy", "isolated")) { "Unknown linRouter.hubMode: $hubMode" }
+        if (hubMode == "isolated") {
+            target.pluginManager.withPlugin("com.android.base") {
+                target.extensions.findByType(CommonExtension::class.java)?.let(::configurePackaging)
+            }
+            IsolatedHubAggregation.configure(target)
+            return
+        }
         // 1. 被动注册：每个应用了插件的模块在配置时自动向根项目注册自己，消除 evaluationDependsOn 强耦合
         registerModule(target)
 

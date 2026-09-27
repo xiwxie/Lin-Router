@@ -5,10 +5,23 @@
 
 LinRouter 是一个专为现代化 Android 多模块工程打造的**极速、类型安全、编译期聚合**的路由框架。
 
+## 1.1.3 新特性：独立汇总 (Isolated Hub)
+
+新增可选的高性能构建模式，专为 KSP2 设计：
+
+```properties
+linRouter.hubMode=isolated
+linRouter.aggregationMode=auto
+```
+
+修改普通业务代码时，业务 KSP 不再承担 AppHub 的全源码聚合依赖，大幅缩短增量编译耗时。默认保持 `legacy` 兼容旧版行为，可随时回退。无需改变路由调用 API；业务模块仍需显式应用 KSP 并声明 `implementation(router-api)` 与 `ksp(router-compiler)` 依赖。
+
+升级边界、装载时序、R8 混淆规则及实测结果详见 [1.1.3 发布说明](docs/releases/1.1.3.md)。
+
 ## ✨ 核心特性
 
-* ⚡️ **极致冷启动 :** 抛弃沉重的全量扫描，基于 `KSP 编译期聚合` 技术生成 `LinRouterAppHub`。配合 R8 `ServiceLoaderRewriter` 优化，实现 Release 环境下**零反射、零扫描**。
-* 🚀 **极速编译体验:** 纯 KSP 架构，完美支持 Gradle 增量编译与配置缓存。
+* **编译期路由表：** 通过 `LinRouterAppHub` 静态装载模块 Loader；初始化时通过固定类名反射创建 Hub，需要保留对应 R8 规则。
+* **增量构建优化：** KSP 生成模块 Loader，可显式启用独立 Hub 汇总任务，彻底隔离业务代码变动对聚合的影响。
 * 🛡️ **类型安全获取:** 利用 Kotlin `reified` 魔法实现 `fetch<T>()`，智能推导目标类型（Fragment/Service），彻底告别 `as` 强转风险。
 * 💉 **参数自动注入:** 使用 `@LinParam` 注解，通过生成的 Injector 实现 Intent/Arguments 参数自动装配。
 * 🚦 **异步责任链拦截器:** 优雅的 `RouteInterceptor` 引擎，轻松应对登录拦截、埋点监控等异步业务逻辑。
@@ -31,27 +44,57 @@ dependencyResolutionManagement {
 }
 ```
 
-### 2. 引入插件
-在根目录 `build.gradle.kts` 中引入：
+### 2. 引入组件
+
+在已有 Android/Kotlin/KSP 版本配置的工程中，通过 `gradle/libs.versions.toml` 统一管理版本：
+
+```toml
+[versions]
+linRoute = "v1.1.3"
+
+[libraries]
+lin-route-plugin = { module = "com.github.xiwxie.Lin-Router:router-plugin", version.ref = "linRoute" }
+lin-route-api = { module = "com.github.xiwxie.Lin-Router:router-api", version.ref = "linRoute" }
+lin-route-compiler = { module = "com.github.xiwxie.Lin-Router:router-compiler", version.ref = "linRoute" }
+```
+
+根 `build.gradle.kts`：
 
 ```kotlin
-plugins {
-    id("com.lin.router.plugin") version "v1.0.9" apply false
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+    dependencies {
+        classpath(libs.lin.route.plugin)
+    }
 }
-gradle.properties配置需要调整：
- 路由聚合模式：
-# single (单体主工程，跳过扫描，直接注入极速编译)
-# auto (默认，多模块自动扫描依赖)
-linRouter.aggregationMode=single
+```
+
+`gradle.properties`（独立模式需使用包含此能力的版本）：
+
+```properties
+linRouter.hubMode=isolated
+# auto 会聚合当前变体的依赖模块；single 仅汇总 App 本地 Loader。
+linRouter.aggregationMode=auto
 ```
 
 ### 3. 业务模块启用
-在每个需要使用路由的模块（App 或 Library）中应用插件：
+
+在每个需要生成路由的模块（App 或 Library）中应用插件并声明依赖：
 
 ```kotlin
 plugins {
-    id("com.android.application") // 或 id("com.android.library")
-    id("com.lin.router.plugin")    // 一键配置 KSP、依赖及路由聚合参数
+    id("com.android.application") // Library 使用 com.android.library
+    id("com.google.devtools.ksp") // 版本与项目 Kotlin/KSP 对齐
+    id("com.lin.router.plugin")
+}
+
+dependencies {
+    implementation(libs.lin.route.api)
+    ksp(libs.lin.route.compiler)
 }
 ```
 

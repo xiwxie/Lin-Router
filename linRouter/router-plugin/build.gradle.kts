@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "com.lin.router.plugin"
-version = "1.1.2"
+version = libs.versions.linRouterRelease.get()
 
 // 注册你的插件元数据（别人用的就是这里定义的 ID）
 gradlePlugin {
@@ -23,6 +23,9 @@ dependencies {
     implementation(gradleApi())
     compileOnly(libs.android.tools.gradle)
     compileOnly(libs.symbol.processing.gradle.plugin)
+    implementation(libs.kotlinpoet)
+    testImplementation(libs.junit)
+    testImplementation(gradleTestKit())
 }
 
 // 兼容 Java 17 (AGP 8.0+ 强要求)

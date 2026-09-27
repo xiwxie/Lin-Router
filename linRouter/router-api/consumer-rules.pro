@@ -8,3 +8,6 @@
 
 # 保留 KSP 自动生成的参数注入类及其无参构造 (如果是通过反射寻找的话)
 -keep class * implements com.lin.router.api.LinRouterInjector { <init>(); }
+
+# LinRouter.init 通过固定类名反射实例化 Hub；同时适用于 legacy / isolated。
+-keep class com.lin.router.generated.LinRouterAppHub { public <init>(); }
