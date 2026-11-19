@@ -1,3 +1,11 @@
+# 1.1.4（2026-11-19）
+
+- **router-plugin**：`isolated` 模式改用 ASM 直接生成 `LinRouterAppHub.class` 并通过 `ScopedArtifacts.Scope.PROJECT` + `toAppend(ScopedArtifact.CLASSES)` 注入，彻底解决 AGP 9 Built-in Kotlin + KSP 2.3.10+ 下与 `variant.sources.kotlin.all` 的任务循环依赖，同时路由变动不再触发主工程 `compileKotlin` 重编。
+- **router-plugin**：显式固定 `kotlin { jvmToolchain(17) }`、`JvmTarget.JVM_17` 与 `KotlinVersion.KOTLIN_2_0`，对齐 JitPack `openjdk17` 构建产物，兼容 Gradle 8.0–9.9.0 / AGP 8.0–9.x。
+- **router-api**：`LinRouter.init()` 与 `inject()` 新增 `isLogEnabled(...)` 前置判断，默认 `INFO` 级别下跳过 `routeMap` 的 `VERBOSE` 遍历与字符串拼接，减少冷启动无效开销。
+- **router-compiler**：保持极简的“每模块最多 1 个 RouterLoader + 1 个 InterceptorLoader”，无额外类数量膨胀。
+- 详见 [1.1.4 发布说明](docs/releases/1.1.4.md)。
+
 # 1.1.3（2026-09-27）
 
 - 新增 `linRouter.hubMode=isolated`，通过独立 Gradle 任务生成 AppHub，避免业务 KSP 的全源码聚合失效。

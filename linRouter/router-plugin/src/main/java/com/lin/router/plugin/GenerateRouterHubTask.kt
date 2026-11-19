@@ -1,13 +1,5 @@
 package com.lin.router.plugin
 
-import com.squareup.kotlinpoet.ClassName
-import com.squareup.kotlinpoet.FileSpec
-import com.squareup.kotlinpoet.FunSpec
-import com.squareup.kotlinpoet.KModifier
-import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import com.squareup.kotlinpoet.STAR
-import com.squareup.kotlinpoet.TypeSpec
-import com.squareup.kotlinpoet.asClassName
 import java.io.File
 import java.util.zip.ZipFile
 import org.gradle.api.DefaultTask
@@ -23,9 +15,11 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.Opcodes
 
 /**
- * 从模块 Loader 生成固定名称的 AppHub；不解析业务源代码、不加载依赖类到 JVM。
+ * 从模块 Loader 直接生成固定名称的 AppHub 字节码；不解析业务源代码、不加载依赖类到 JVM。
  * 即使删除最后一个 Loader，任务仍生成合法的空 Hub；不使用 SkipWhenEmpty。
  * @author pengshilin
  * @since 2026-09-27
@@ -49,30 +43,48 @@ public abstract class GenerateRouterHubTask : DefaultTask() {
     @get:Input
     public abstract val loaderOrder: ListProperty<String>
 
-    /** 每个变体独占的 Kotlin 输出目录，不包含业务 KSP 的产物。 */
+    /** 每个变体独占的字节码输出目录，不包含业务 KSP 或 Kotlin 编译产物。 */
     @get:OutputDirectory
     public abstract val outputDirectory: DirectoryProperty
 
     /**
-     * 全量重建很小的汇总文件；输入未变时由 Gradle 跳过整个任务。
+     * 全量重建很小的汇总字节码文件；输入未变时由 Gradle 跳过整个任务。
      * @return 无返回值；重复类名或不可读的依赖文件会使构建失败，避免静默丢路由。
      */
     @TaskAction
     public fun generate(): Unit {
         val names = RouterHubSource.collect(localLoaders.files, dependencyClasspath.files)
-        val source = RouterHubSource.render(names, currentModulePrefix.get(), loaderOrder.get())
-        source.writeTo(outputDirectory.get().asFile)
+        val bytecode = RouterHubSource.renderBytecode(names, currentModulePrefix.get(), loaderOrder.get())
+        val outRoot = outputDirectory.get().asFile
+        if (outRoot.exists()) {
+            outRoot.deleteRecursively()
+        }
+        val classFile = File(outRoot, RouterHubSource.HUB_CLASS_RELATIVE_PATH)
+        classFile.parentFile.mkdirs()
+        classFile.writeBytes(bytecode)
     }
 }
 
 /**
- * 无 Gradle 状态的 Loader 发现与源码生成器，供任务和回归测试共用。
+ * 无 Gradle 状态的 Loader 发现与 Hub 字节码生成器，供任务和回归测试共用。
  * @author pengshilin
  * @since 2026-09-27
  */
 internal object RouterHubSource {
     /** 编译器的固定生成包；不是对任意业务类做后缀扫描。 */
     private const val GENERATED_PACKAGE: String = "com.lin.router.generated"
+
+    /** 生成包对应的 JVM 内部路径前缀。 */
+    private const val GENERATED_PACKAGE_PATH: String = "com/lin/router/generated/"
+
+    /** 生成的 AppHub JVM 内部类名。 */
+    private const val HUB_INTERNAL_NAME: String = "${GENERATED_PACKAGE_PATH}LinRouterAppHub"
+
+    /** 运行时中枢接口 JVM 内部类名。 */
+    private const val INTERFACE_INTERNAL_NAME: String = "com/lin/router/api/IRouterAppHub"
+
+    /** 输出目录内 Hub 类文件的相对路径。 */
+    internal const val HUB_CLASS_RELATIVE_PATH: String = "$HUB_INTERNAL_NAME.class"
 
     /** 编译器生成的顶层 Loader 类名约束，不接受嵌套类。 */
     private val loaderPattern: Regex = Regex("[A-Za-z_][A-Za-z0-9_]*(RouterLoader|InterceptorLoader)")
@@ -110,13 +122,13 @@ internal object RouterHubSource {
     }
 
     /**
-     * 生成与 IRouterAppHub 契约一致的静态调用；依赖顺序确定，当前应用最后装载。
+     * 直接生成与 IRouterAppHub 契约一致的 JVM 字节码；依赖顺序确定，当前应用最后装载。
      * @param names Loader 简单类名。
      * @param currentPrefix 应用模块前缀。
      * @param preferredOrder 可选依赖模块顺序；未列出的模块按前缀排序。
-     * @return 可直接编译的 Hub 源码；不包含反射或运行时扫描。
+     * @return 可直接合入 DEX/R8 的 LinRouterAppHub.class 字节码。
      */
-    internal fun render(names: Set<String>, currentPrefix: String, preferredOrder: List<String>): FileSpec {
+    internal fun renderBytecode(names: Set<String>, currentPrefix: String, preferredOrder: List<String>): ByteArray {
         fun prefix(name: String): String = name.removeSuffix("InterceptorLoader").removeSuffix("RouterLoader")
         val ordered = names.sortedWith(compareBy<String>(
             { if (prefix(it) == currentPrefix) 1 else 0 },
@@ -125,25 +137,85 @@ internal object RouterHubSource {
         ))
         val routes = ordered.filter { it.endsWith("RouterLoader") }
         val interceptors = ordered.filter { it.endsWith("InterceptorLoader") }
-        fun count(method: String, loaders: List<String>): FunSpec = FunSpec.builder(method)
-            .addModifiers(KModifier.OVERRIDE).returns(Int::class).apply {
-                if (loaders.isEmpty()) addStatement("return 0")
-                else addStatement("return " + loaders.joinToString(" + ") { "%L().getCheckCount()" }, *loaders.toTypedArray())
-            }.build()
-        val init = FunSpec.builder("init").addModifiers(KModifier.OVERRIDE)
-            .addParameter("routeMap", ClassName("kotlin.collections", "MutableMap")
-                .parameterizedBy(String::class.asClassName(), ClassName("java.lang", "Class").parameterizedBy(STAR)))
-            .addParameter("interceptors", ClassName("kotlin.collections", "MutableList")
-                .parameterizedBy(ClassName("com.lin.router.api", "LinInterceptorMeta")))
-            .apply {
-                routes.forEach { addStatement("com.lin.router.generated.%L().loadInto(routeMap)", it) }
-                interceptors.forEach { addStatement("com.lin.router.generated.%L().loadInto(interceptors)", it) }
-            }.build()
-        return FileSpec.builder(GENERATED_PACKAGE, "LinRouterAppHub")
-            .addType(TypeSpec.classBuilder("LinRouterAppHub")
-                .addSuperinterface(ClassName("com.lin.router.api", "IRouterAppHub"))
-                .addFunction(count("getRouteCount", routes))
-                .addFunction(count("getInterceptorCount", interceptors))
-                .addFunction(init).build()).build()
+
+        val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        cw.visit(
+            Opcodes.V1_8,
+            Opcodes.ACC_PUBLIC or Opcodes.ACC_FINAL or Opcodes.ACC_SUPER,
+            HUB_INTERNAL_NAME,
+            null,
+            "java/lang/Object",
+            arrayOf(INTERFACE_INTERNAL_NAME)
+        )
+
+        // 生成 public 无参构造器（供 LinRouter 反射及 R8 keep 规则使用）
+        cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null).apply {
+            visitCode()
+            visitVarInsn(Opcodes.ALOAD, 0)
+            visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+            visitInsn(Opcodes.RETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+
+        emitCountMethod(cw, "getRouteCount", routes)
+        emitCountMethod(cw, "getInterceptorCount", interceptors)
+
+        val initSignature =
+            "(Ljava/util/Map<Ljava/lang/String;Ljava/lang/Class<*>;>;Ljava/util/List<Lcom/lin/router/api/LinInterceptorMeta;>;)V"
+        cw.visitMethod(Opcodes.ACC_PUBLIC, "init", "(Ljava/util/Map;Ljava/util/List;)V", initSignature, null).apply {
+            visitCode()
+            routes.forEach { loader ->
+                val internal = "$GENERATED_PACKAGE_PATH$loader"
+                visitTypeInsn(Opcodes.NEW, internal)
+                visitInsn(Opcodes.DUP)
+                visitMethodInsn(Opcodes.INVOKESPECIAL, internal, "<init>", "()V", false)
+                visitVarInsn(Opcodes.ALOAD, 1)
+                visitMethodInsn(Opcodes.INVOKEVIRTUAL, internal, "loadInto", "(Ljava/util/Map;)V", false)
+            }
+            interceptors.forEach { loader ->
+                val internal = "$GENERATED_PACKAGE_PATH$loader"
+                visitTypeInsn(Opcodes.NEW, internal)
+                visitInsn(Opcodes.DUP)
+                visitMethodInsn(Opcodes.INVOKESPECIAL, internal, "<init>", "()V", false)
+                visitVarInsn(Opcodes.ALOAD, 2)
+                visitMethodInsn(Opcodes.INVOKEVIRTUAL, internal, "loadInto", "(Ljava/util/List;)V", false)
+            }
+            visitInsn(Opcodes.RETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+
+        cw.visitEnd()
+        return cw.toByteArray()
+    }
+
+    /**
+     * 生成 getRouteCount / getInterceptorCount 方法字节码，空集合直接返回 0。
+     * @param cw 当前类字节码写入器。
+     * @param methodName 方法名。
+     * @param loaders 对应类型的 Loader 简单类名列表。
+     */
+    private fun emitCountMethod(cw: ClassWriter, methodName: String, loaders: List<String>): Unit {
+        cw.visitMethod(Opcodes.ACC_PUBLIC, methodName, "()I", null, null).apply {
+            visitCode()
+            if (loaders.isEmpty()) {
+                visitInsn(Opcodes.ICONST_0)
+            } else {
+                loaders.forEachIndexed { index, loader ->
+                    val internal = "$GENERATED_PACKAGE_PATH$loader"
+                    visitTypeInsn(Opcodes.NEW, internal)
+                    visitInsn(Opcodes.DUP)
+                    visitMethodInsn(Opcodes.INVOKESPECIAL, internal, "<init>", "()V", false)
+                    visitMethodInsn(Opcodes.INVOKEVIRTUAL, internal, "getCheckCount", "()I", false)
+                    if (index > 0) {
+                        visitInsn(Opcodes.IADD)
+                    }
+                }
+            }
+            visitInsn(Opcodes.IRETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
     }
 }

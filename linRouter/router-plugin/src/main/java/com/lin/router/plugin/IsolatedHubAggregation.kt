@@ -1,6 +1,8 @@
 package com.lin.router.plugin
 
+import com.android.build.api.artifact.ScopedArtifact
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.api.variant.ScopedArtifacts
 import com.google.devtools.ksp.gradle.KspAATask
 import com.google.devtools.ksp.gradle.KspExtension
 import org.gradle.api.Project
@@ -9,8 +11,8 @@ import org.gradle.kotlin.dsl.named
 import org.gradle.kotlin.dsl.register
 
 /**
- * 将 Hub 汇总接在业务 KSP 之后；不把 Hub 反向加入业务 KSP 的源文件依赖图。
- * 适配 KSP2 task API，兼容范围见发布说明。
+ * 将 Hub 汇总接在业务 KSP 之后；直接产出字节码并注入 ScopedArtifact.CLASSES，彻底绕开 variant.sources.kotlin，
+ * 避免在 AGP 9 Built-in Kotlin + KSP 2.3.10+ 下与消费 variant.sources.kotlin.all 的 KSP 任务成环。
  * @author pengshilin
  * @since 2026-09-27
  */
@@ -55,11 +57,16 @@ internal object IsolatedHubAggregation {
                         if (mode == "auto") dependencyClasspath.from(original.get().kspConfig.libraries)
                         currentModulePrefix.set(currentPrefix)
                         loaderOrder.set(order)
-                        outputDirectory.set(outputRoot.dir("generated/linRouterHub/${variant.name}/kotlin"))
+                        outputDirectory.set(outputRoot.dir("generated/linRouterHub/${variant.name}/classes"))
                     }
-                    // 排除同时消除 KSP 对 Hub 任务的隐式依赖，避免 KSP -> Hub -> KSP 环。
-                    ksp.excludedSources.from(hub)
-                    variant.sources.kotlin?.addGeneratedSourceDirectory(hub) { it.outputDirectory }
+                    // 直接向 PROJECT 作用域 CLASSES 追加生成的字节码目录，不经过源码集与 Kotlin 编译任务。
+                    variant.artifacts
+                        .forScope(ScopedArtifacts.Scope.PROJECT)
+                        .use(hub)
+                        .toAppend(
+                            ScopedArtifact.CLASSES,
+                            GenerateRouterHubTask::outputDirectory
+                        )
                 }
             }
         }

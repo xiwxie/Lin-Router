@@ -23,13 +23,22 @@ dependencies {
     implementation(gradleApi())
     compileOnly(libs.android.tools.gradle)
     compileOnly(libs.symbol.processing.gradle.plugin)
-    implementation(libs.kotlinpoet)
+    implementation(libs.asm)
     testImplementation(libs.junit)
     testImplementation(gradleTestKit())
 }
 
-// 兼容 Java 17 (AGP 8.0+ 强要求)
+// 兼容 Java 17 (AGP 8.0+ 强要求)，固定 Kotlin Toolchain 与语言版本以对齐 JitPack JDK 17 与 Gradle kotlin-dsl
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+}
+
+kotlin {
+    jvmToolchain(17)
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        languageVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
+        apiVersion.set(org.jetbrains.kotlin.gradle.dsl.KotlinVersion.KOTLIN_2_0)
+    }
 }

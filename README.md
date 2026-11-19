@@ -5,18 +5,18 @@
 
 LinRouter 是一个专为现代化 Android 多模块工程打造的**极速、类型安全、编译期聚合**的路由框架。
 
-## 1.1.3 新特性：独立汇总 (Isolated Hub)
+## 1.1.4 新特性：AGP 9 / Gradle 9.9.0 / KSP 2.3.10+ 兼容与启动优化
 
-新增可选的高性能构建模式，专为 KSP2 设计：
+- **彻底消除 KSP 2.3.10+ 环形依赖**：`linRouter.hubMode=isolated` 改为 ASM 直接生成 `LinRouterAppHub.class` 并通过 AGP `ScopedArtifact.CLASSES`（`Scope.PROJECT`）注入，不再回写 `variant.sources.kotlin`，兼容 Gradle 8.0–9.9.0、AGP 8.0–9.x（含 Built-in Kotlin）与 KSP2（2.1.x–2.3.10+），且路由变更不再触发主工程 `compileKotlin` 重编。
+- **固定插件 JVM 17 / Kotlin 2.0 工具链**：对齐 JitPack `openjdk17` 构建环境，消除本地 JDK 21 与 CI 产物字节码版本差异。
+- **冷启动日志零无效遍历**：`LinRouter.init()` 与 `inject()` 新增日志级别前置判断，默认 `INFO` 级别下不再遍历 `routeMap` 拼接 `VERBOSE` 字符串。
 
 ```properties
 linRouter.hubMode=isolated
 linRouter.aggregationMode=auto
 ```
 
-修改普通业务代码时，业务 KSP 不再承担 AppHub 的全源码聚合依赖，大幅缩短增量编译耗时。默认保持 `legacy` 兼容旧版行为，可随时回退。无需改变路由调用 API；业务模块仍需显式应用 KSP 并声明 `implementation(router-api)` 与 `ksp(router-compiler)` 依赖。
-
-升级边界、装载时序、R8 混淆规则及实测结果详见 [1.1.3 发布说明](docs/releases/1.1.3.md)。
+默认仍保持 `legacy` 兼容旧版行为，可随时回退。升级边界、兼容矩阵及实测结果详见 [1.1.4 发布说明](docs/releases/1.1.4.md) 与 [1.1.3 发布说明](docs/releases/1.1.3.md)。
 
 ## ✨ 核心特性
 
@@ -50,7 +50,7 @@ dependencyResolutionManagement {
 
 ```toml
 [versions]
-linRoute = "v1.1.3"
+linRoute = "v1.1.4"
 
 [libraries]
 lin-route-plugin = { module = "com.github.xiwxie.Lin-Router:router-plugin", version.ref = "linRoute" }

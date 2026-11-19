@@ -46,6 +46,15 @@ public object LinRouter {
         return this
     }
 
+    /**
+     * 判断指定级别日志是否需要构造并输出，避免关闭或降级日志时产生无效遍历与字符串拼接。
+     * @param level 目标日志级别。
+     * @return true 表示需要构造并传递给日志代理。
+     */
+    private fun isLogEnabled(level: LinLogLevel): Boolean {
+        return currentLogLevel.value <= level.value || logger !is DefaultRouterLogger
+    }
+
     public fun init() {
         if (isInitialized) return
         val startTime = SystemClock.elapsedRealtime()
@@ -77,11 +86,15 @@ public object LinRouter {
             val totalTime = SystemClock.elapsedRealtime() - startTime
             
             // 关键初始化信息使用 INFO 级别
-            logger.i(TAG, "LinRouter 初始化成功！路由: ${routeMap.size}, 拦截器: ${interceptorMetas.size}, 耗时：${totalTime}ms")
-            
-            // 路由详情使用 VERBOSE 级别，仅在开发者需要时打印
-            routeMap.forEach { (path, clazz) ->
-                logger.v(TAG, "  [Route] $path -> ${clazz.name}")
+            if (isLogEnabled(LinLogLevel.INFO)) {
+                logger.i(TAG, "LinRouter 初始化成功！路由: ${routeMap.size}, 拦截器: ${interceptorMetas.size}, 耗时：${totalTime}ms")
+            }
+
+            // 路由详情使用 VERBOSE 级别，仅在需要输出时才遍历与拼接，避免冷启动无效开销
+            if (isLogEnabled(LinLogLevel.VERBOSE)) {
+                routeMap.forEach { (path, clazz) ->
+                    logger.v(TAG, "  [Route] $path -> ${clazz.name}")
+                }
             }
             
         } catch (e: Exception) {
@@ -155,7 +168,9 @@ public object LinRouter {
             }
             injector.inject(target)
         } catch (e: ClassNotFoundException) {
-            logger.v(TAG, "页面无注入配置: $className")
+            if (isLogEnabled(LinLogLevel.VERBOSE)) {
+                logger.v(TAG, "页面无注入配置: $className")
+            }
         } catch (e: Exception) {
             logger.e(TAG, "参数注入失败: $className", e)
         }

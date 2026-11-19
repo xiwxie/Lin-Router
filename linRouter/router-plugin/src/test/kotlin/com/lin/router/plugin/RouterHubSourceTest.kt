@@ -7,9 +7,14 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.ClassWriter
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
 
 /**
- * 覆盖类路径发现、删除、空模块与装载顺序，防止提速掩盖路由缺失。
+ * 覆盖类路径发现、删除、空模块、装载顺序及生成的 JVM 字节码可执行性。
  * @author pengshilin
  * @since 2026-09-27
  */
@@ -46,25 +51,136 @@ public class RouterHubSourceTest {
         RouterHubSource.collect(setOf(File(first, "AppRouterLoader.kt"), File(second, "AppRouterLoader.kt")), emptySet())
     }
 
-    /** 本地最后一个 Loader 删除后仍保留依赖模块；全空时产出可用的空 Hub。 */
+    /** 本地最后一个 Loader 删除后仍保留依赖模块；全空时产出可加载执行的空 Hub 字节码。 */
     @Test
     public fun deletionAndEmptyApplicationRemainValid(): Unit {
-        val dependencyOnly = RouterHubSource.render(setOf("LibraryRouterLoader"), "App", emptyList()).toString()
-        assertTrue(dependencyOnly.contains("LibraryRouterLoader().loadInto(routeMap)"))
-        assertFalse(dependencyOnly.contains("AppRouterLoader"))
-        val empty = RouterHubSource.render(emptySet(), "App", emptyList()).toString()
-        assertTrue(empty.contains("class LinRouterAppHub : IRouterAppHub"))
-        assertEquals(2, Regex("(?:return |=[ ]*)0").findAll(empty).count())
+        val dependencyOnly = RouterHubSource.renderBytecode(setOf("LibraryRouterLoader"), "App", emptyList())
+        val calls = collectMethodCalls(dependencyOnly, "init")
+        assertTrue(calls.contains("com/lin/router/generated/LibraryRouterLoader.loadInto"))
+        assertFalse(calls.any { it.contains("AppRouterLoader") })
+
+        val empty = RouterHubSource.renderBytecode(emptySet(), "App", emptyList())
+        val cl = BytecodeClassLoader(
+            mapOf(
+                "com.lin.router.api.IRouterAppHub" to buildStubInterface("com/lin/router/api/IRouterAppHub"),
+                "com.lin.router.generated.LinRouterAppHub" to empty
+            )
+        )
+        val hubClass = cl.loadClass("com.lin.router.generated.LinRouterAppHub")
+        val hub = hubClass.getDeclaredConstructor().newInstance()
+        assertEquals(0, hubClass.getMethod("getRouteCount").invoke(hub))
+        assertEquals(0, hubClass.getMethod("getInterceptorCount").invoke(hub))
+        hubClass.getMethod("init", MutableMap::class.java, MutableList::class.java)
+            .invoke(hub, mutableMapOf<String, Class<*>>(), mutableListOf<Any>())
     }
 
-    /** 输入枚举顺序不影响产物；显式依赖顺序生效，App 始终最后覆盖。 */
+    /** 输入枚举顺序不影响字节码；显式依赖顺序生效，App 始终最后覆盖，且可实际加载执行。 */
     @Test
     public fun orderingIsStableAndAppLoadsLast(): Unit {
         val names = linkedSetOf("ZRouterLoader", "AppRouterLoader", "ARouterLoader")
-        val sorted = RouterHubSource.render(names, "App", emptyList()).toString()
-        assertEquals(sorted, RouterHubSource.render(names.reversed().toSet(), "App", emptyList()).toString())
-        val explicit = RouterHubSource.render(names, "App", listOf("Z", "A")).toString()
-        assertTrue(explicit.indexOf("ZRouterLoader().loadInto") < explicit.indexOf("ARouterLoader().loadInto"))
-        assertTrue(explicit.indexOf("ARouterLoader().loadInto") < explicit.indexOf("AppRouterLoader().loadInto"))
+        val sorted = RouterHubSource.renderBytecode(names, "App", emptyList())
+        assertArrayEquals(sorted, RouterHubSource.renderBytecode(names.reversed().toSet(), "App", emptyList()))
+
+        val explicit = RouterHubSource.renderBytecode(names, "App", listOf("Z", "A"))
+        val calls = collectMethodCalls(explicit, "init")
+        val zIdx = calls.indexOf("com/lin/router/generated/ZRouterLoader.loadInto")
+        val aIdx = calls.indexOf("com/lin/router/generated/ARouterLoader.loadInto")
+        val appIdx = calls.indexOf("com/lin/router/generated/AppRouterLoader.loadInto")
+        assertTrue(zIdx >= 0 && zIdx < aIdx && aIdx < appIdx)
+
+        // 真实加载并执行生成的字节码，验证栈帧、方法签名与覆盖顺序。
+        val classes = mutableMapOf(
+            "com.lin.router.api.IRouterAppHub" to buildStubInterface("com/lin/router/api/IRouterAppHub"),
+            "com.lin.router.generated.LinRouterAppHub" to explicit,
+            "com.lin.router.generated.ZRouterLoader" to buildStubLoader("com/lin/router/generated/ZRouterLoader", "/dup", String::class.java, 2),
+            "com.lin.router.generated.ARouterLoader" to buildStubLoader("com/lin/router/generated/ARouterLoader", "/dup", Int::class.javaObjectType, 3),
+            "com.lin.router.generated.AppRouterLoader" to buildStubLoader("com/lin/router/generated/AppRouterLoader", "/dup", Long::class.javaObjectType, 5)
+        )
+        val cl = BytecodeClassLoader(classes)
+        val hubClass = cl.loadClass("com.lin.router.generated.LinRouterAppHub")
+        val hub = hubClass.getDeclaredConstructor().newInstance()
+        assertEquals(10, hubClass.getMethod("getRouteCount").invoke(hub))
+        assertEquals(0, hubClass.getMethod("getInterceptorCount").invoke(hub))
+        val routeMap = mutableMapOf<String, Class<*>>()
+        hubClass.getMethod("init", MutableMap::class.java, MutableList::class.java)
+            .invoke(hub, routeMap, mutableListOf<Any>())
+        assertEquals(Long::class.javaObjectType, routeMap["/dup"])
+    }
+
+    private fun collectMethodCalls(bytecode: ByteArray, targetMethod: String): List<String> {
+        val calls = mutableListOf<String>()
+        ClassReader(bytecode).accept(object : ClassVisitor(Opcodes.ASM9) {
+            override fun visitMethod(
+                access: Int,
+                name: String?,
+                descriptor: String?,
+                signature: String?,
+                exceptions: Array<out String>?
+            ): MethodVisitor? {
+                if (name != targetMethod) return null
+                return object : MethodVisitor(Opcodes.ASM9) {
+                    override fun visitMethodInsn(
+                        opcode: Int,
+                        owner: String,
+                        methodName: String,
+                        desc: String,
+                        isInterface: Boolean
+                    ) {
+                        calls.add("$owner.$methodName")
+                    }
+                }
+            }
+        }, 0)
+        return calls
+    }
+
+    private fun buildStubInterface(internalName: String): ByteArray {
+        val cw = ClassWriter(0)
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC or Opcodes.ACC_INTERFACE or Opcodes.ACC_ABSTRACT, internalName, null, "java/lang/Object", null)
+        cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_ABSTRACT, "getRouteCount", "()I", null, null).visitEnd()
+        cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_ABSTRACT, "getInterceptorCount", "()I", null, null).visitEnd()
+        cw.visitMethod(Opcodes.ACC_PUBLIC or Opcodes.ACC_ABSTRACT, "init", "(Ljava/util/Map;Ljava/util/List;)V", null, null).visitEnd()
+        cw.visitEnd()
+        return cw.toByteArray()
+    }
+
+    private fun buildStubLoader(internalName: String, key: String, target: Class<*>, count: Int): ByteArray {
+        val cw = ClassWriter(ClassWriter.COMPUTE_MAXS)
+        cw.visit(Opcodes.V1_8, Opcodes.ACC_PUBLIC or Opcodes.ACC_SUPER, internalName, null, "java/lang/Object", null)
+        cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V", null, null).apply {
+            visitCode()
+            visitVarInsn(Opcodes.ALOAD, 0)
+            visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false)
+            visitInsn(Opcodes.RETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        cw.visitMethod(Opcodes.ACC_PUBLIC, "getCheckCount", "()I", null, null).apply {
+            visitCode()
+            visitIntInsn(Opcodes.BIPUSH, count)
+            visitInsn(Opcodes.IRETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        cw.visitMethod(Opcodes.ACC_PUBLIC, "loadInto", "(Ljava/util/Map;)V", null, null).apply {
+            visitCode()
+            visitVarInsn(Opcodes.ALOAD, 1)
+            visitLdcInsn(key)
+            visitLdcInsn(org.objectweb.asm.Type.getType(target))
+            visitMethodInsn(Opcodes.INVOKEINTERFACE, "java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", true)
+            visitInsn(Opcodes.POP)
+            visitInsn(Opcodes.RETURN)
+            visitMaxs(0, 0)
+            visitEnd()
+        }
+        cw.visitEnd()
+        return cw.toByteArray()
+    }
+
+    private class BytecodeClassLoader(private val definitions: Map<String, ByteArray>) : ClassLoader(RouterHubSourceTest::class.java.classLoader) {
+        override fun findClass(name: String): Class<*> {
+            val bytes = definitions[name] ?: return super.findClass(name)
+            return defineClass(name, bytes, 0, bytes.size)
+        }
     }
 }

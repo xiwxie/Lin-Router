@@ -51,8 +51,9 @@ public class GenerateRouterHubTaskTest {
         assertEquals(TaskOutcome.FROM_CACHE, run().task(":hub")?.outcome)
         loader.delete()
         assertEquals(TaskOutcome.SUCCESS, run().task(":hub")?.outcome)
-        val hub = File(root, "build/hub/com/lin/router/generated/LinRouterAppHub.kt").readText()
-        assertFalse(hub.contains("AppRouterLoader"))
-        assertEquals(2, Regex("(?:return |=[ ]*)0").findAll(hub).count())
+        val hubClassFile = File(root, "build/hub/com/lin/router/generated/LinRouterAppHub.class")
+        assertTrue(hubClassFile.exists())
+        val bytecode = hubClassFile.readBytes()
+        assertArrayEquals(RouterHubSource.renderBytecode(emptySet(), "App", emptyList()), bytecode)
     }
 }
